@@ -1,15 +1,18 @@
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { Timer } from 'three/addons/misc/Timer.js';
 import GUI from 'lil-gui';
 import {
 	AmbientLight,
 	BoxGeometry,
 	ConeGeometry,
+	DirectionalLight,
+	FogExp2,
 	Group,
 	Mesh,
 	MeshStandardMaterial,
+	PCFSoftShadowMap,
 	PerspectiveCamera,
 	PlaneGeometry,
+	PointLight,
+	PointLightHelper,
 	RepeatWrapping,
 	Scene,
 	SphereGeometry,
@@ -17,6 +20,9 @@ import {
 	TextureLoader,
 	WebGLRenderer,
 } from 'three';
+import { Timer } from 'three/addons/misc/Timer.js';
+import { Sky } from 'three/addons/objects/Sky.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 /**
  * Base
@@ -270,19 +276,52 @@ for (let i = 0; i < 50; i++) {
 	grave.rotation.x = (Math.random() - 0.5) * 0.5;
 	grave.rotation.y = (Math.random() - 0.5) * 0.5;
 	grave.rotation.z = (Math.random() - 0.5) * 0.85;
+	grave.castShadow = true;
+	grave.receiveShadow = true;
 	graves.add(grave);
 }
 /**
  * Lights
  */
 // Ambient light
-const ambientLight = new AmbientLight('#ffffff', 3);
+const ambientLight = new AmbientLight('#86cdff', 0.275);
 scene.add(ambientLight);
 
 // // Directional light
-// const directionalLight = new DirectionalLight('#ffffff', 1.5);
-// directionalLight.position.set(3, 2, -8);
-// scene.add(directionalLight);
+const directionalLight = new DirectionalLight('#86cdff', 1);
+directionalLight.position.set(3, 6, -10);
+// Mappings
+directionalLight.shadow.mapSize.width = 256;
+directionalLight.shadow.mapSize.height = 256;
+directionalLight.shadow.camera.top = 8;
+directionalLight.shadow.camera.right = 8;
+directionalLight.shadow.camera.bottom = -8;
+directionalLight.shadow.camera.left = -8;
+directionalLight.shadow.camera.near = 1;
+directionalLight.shadow.camera.far = 50;
+scene.add(directionalLight);
+
+// Door light
+const doorLight = new PointLight('#ff7d46', 12, 0, 1.5);
+doorLight.position.set(0, houseMeasurements.door.height + 0.5, houseMeasurements.walls.depth / 2 + 0.4);
+house.add(doorLight);
+
+/**
+ * Ghosts
+ */
+const ghost1 = new PointLight('#8800ff', 10);
+const ghost2 = new PointLight('#ff0088', 6);
+const ghost3 = new PointLight('#ff0000', 6);
+ghost1.shadow.mapSize.width = 256;
+ghost1.shadow.mapSize.height = 256;
+ghost1.shadow.camera.far = 10;
+ghost2.shadow.mapSize.width = 256;
+ghost2.shadow.mapSize.height = 256;
+ghost2.shadow.camera.far = 10;
+ghost3.shadow.mapSize.width = 256;
+ghost3.shadow.mapSize.height = 256;
+ghost3.shadow.camera.far = 10;
+scene.add(ghost1, ghost2, ghost3);
 
 /**
  * Sizes
@@ -310,15 +349,17 @@ window.addEventListener('resize', () => {
  * Camera
  */
 // Base camera
-const camera = new PerspectiveCamera(40, sizes.width / sizes.height, 0.1, 1000);
-camera.position.x = 0;
-camera.position.y = 8;
-camera.position.z = 20;
+const camera = new PerspectiveCamera(60, sizes.width / sizes.height, 0.1, 1000);
+camera.position.x = 8;
+camera.position.y = 6;
+camera.position.z = 14;
 scene.add(camera);
 
 // Controls
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI / 2.15;
+controls.minPolarAngle = Math.PI / 4;
 
 /**
  * Renderer
@@ -329,6 +370,36 @@ const renderer = new WebGLRenderer({
 });
 renderer.setSize(sizes.width, sizes.height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = PCFSoftShadowMap;
+
+// Cast and receive
+directionalLight.castShadow = true;
+ghost1.castShadow = true;
+ghost2.castShadow = true;
+ghost3.castShadow = true;
+walls.castShadow = true;
+roof.castShadow = true;
+walls.receiveShadow = true;
+floor.receiveShadow = true;
+
+/**
+ * Sky
+ */
+const sky = new Sky();
+sky.scale.set(100, 100, 100);
+scene.add(sky);
+
+sky.material.uniforms['turbidity'].value = 10;
+sky.material.uniforms['rayleigh'].value = 3;
+sky.material.uniforms['mieCoefficient'].value = 0.1;
+sky.material.uniforms['mieDirectionalG'].value = 0.95;
+sky.material.uniforms['sunPosition'].value.set(0.3, -0.038, -0.95);
+
+/**
+ * Fog
+ */
+scene.fog = new FogExp2('#04343f', 0.05);
 
 /**
  * Animate
@@ -339,6 +410,22 @@ const tick = () => {
 	// Timer
 	timer.update();
 	const elapsedTime = timer.getElapsed();
+
+	// Ghosts
+	const ghost1Angle = elapsedTime * 0.5;
+	ghost1.position.x = Math.cos(ghost1Angle) * 5;
+	ghost1.position.z = Math.sin(ghost1Angle) * 5;
+	ghost1.position.y = Math.sin(ghost1Angle) * Math.sin(ghost1Angle * 2.34) * Math.sin(ghost1Angle * 3.45);
+
+	const ghost2Angle = -elapsedTime * 0.38;
+	ghost2.position.x = Math.cos(ghost2Angle) * 7;
+	ghost2.position.z = Math.sin(ghost2Angle) * 7;
+	ghost2.position.y = Math.sin(ghost2Angle) * Math.sin(ghost2Angle * 2.34) * Math.sin(ghost2Angle * 3.45);
+
+	const ghost3Angle = elapsedTime * 0.23;
+	ghost3.position.x = Math.cos(ghost3Angle) * 6;
+	ghost3.position.z = Math.sin(ghost3Angle) * 6;
+	ghost3.position.y = Math.sin(ghost3Angle) * Math.sin(ghost3Angle * 2.34) * Math.sin(ghost3Angle * 3.45);
 
 	// Update controls
 	controls.update();
